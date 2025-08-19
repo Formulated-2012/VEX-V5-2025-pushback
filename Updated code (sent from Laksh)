@@ -8,7 +8,9 @@
 #include "pros/adi.hpp"
 #include "pros/misc.h"
 #include "pros/motor_group.hpp"
+#include "pros/motors.hpp"
 #include "pros/rtos.hpp"
+#include <cmath>
 #include <stdlib.h>
  
 //Defining Boolean For pneumatics, pneumatics are pistons, and they are used for rapid changes in game play 
@@ -34,17 +36,19 @@ pros::Controller controller(pros::E_CONTROLLER_MASTER);
 // ensure that our robot goes faster on one side and slower on the other makin it so that our robot is in a
 // loop of turning.
 
-pros::MotorGroup right_motors({-20, -14, 21}, pros::MotorGearset::blue);
-pros::MotorGroup left_motors({11, -13, 1}, pros::MotorGearset::blue);
+pros::MotorGroup right_motors({-21, 12, -3}, pros::MotorGearset::blue);
+pros::MotorGroup left_motors({20, -18, -19}, pros::MotorGearset::blue);
 
 //Mechanism Motors, these are the motors in our two stage intake, we decided to use a two stage intake so 
 // we can spit out unwanted balls out of the robot so that we lose minimal points. The less points the
-// opposing alliance scores the higher chance we have at winning our match. This two stage intake mech,
+// opposing alliance scores the higher chance we have at winning our match. T
+// his two stage intake mechanism is also used to intake balls from the field, so that we can score
 // would also help during autonomous because it would be able spit out opposing alliance balls from the
 // matchload section, during our Autonomous Win Point code.
-pros::Motor intakestage1(7, pros::MotorGearset::blue);
-pros::Motor intakestage2(8, pros::MotorGearset::blue);
-
+pros::MotorGroup intakestage3({10}, pros::MotorGearset::green); // Stage 1 intake motors
+pros::MotorGroup intakestage1({2,}, pros::MotorGearset::blue); // Stage 2 intake motors
+pros::MotorGroup intakestage2({3,}, pros::MotorGearset::green); // Stage 3 intake motors
+//no stage 3 // Stage 3 intake motors
 //Pneumatics System, this iS our pneumatics system we are planning on using two pistons for being able to 
 // rapidly change the route of the ball and change which goal it  qould be going to very quickly. The
 // reason we are usin two pistons is too push up our entire first and second stage of our intake mech. The
@@ -67,7 +71,7 @@ lemlib::Drivetrain drivetrain(&left_motors, // left motor group
     2 // horizontal drift is 2 (for now)
 );
 //ODOMETRY CODE 
-pros::Imu imu(10);
+pros::Imu imu(14);
 
 lemlib::OdomSensors sensors(nullptr, // vertical tracking wheel 1, set to nullptr
                             nullptr, // vertical tracking wheel 2, set to nullptr as we are using IMEs
@@ -89,9 +93,9 @@ lemlib::ControllerSettings lateral_controller(10, // proportional gain (kP)
 );
 
 // angular PID controller
-lemlib::ControllerSettings angular_controller(2, // proportional gain (kP)
+lemlib::ControllerSettings angular_controller(39, // proportional gain (kP)
                                               0, // integral gain (kI)
-                                              10, // derivative gain (kD)
+                                              0, // derivative gain (kD)
                                               0, // anti windup
                                               0, // small error range, in degrees
                                               0, // small error range timeout, in milliseconds
@@ -148,13 +152,7 @@ void competition_initialize() {}
  */
 
 void autonomous() {
-    chassis.setPose(-140, 59,270);
-    chassis.moveToPoint(-61, 60, 1500);
-    level2_level3.set_value(true);
-    random2.set_value(true);
-    intakestage1.move_velocity(600);
-    intakestage2.move_velocity(600);
-    chassis.turnToHeading(0, 1500, {.maxSpeed = 80}, false);
+    chassis.turnToHeading(90, 30000);
 
 }
 
@@ -175,34 +173,46 @@ void autonomous() {
  void colorsensor(){
     
  }
- // Intake Outtake and Intake
-void outtake_inttake() {
-    while (true) {
-        if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1)) { //Outtakes thy intake
-            intakestage1.move_velocity(600);
-            intakestage2.move_velocity(600);
-        }else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2)) { //Intake thy intake
-            intakestage1.move_velocity(-600);
-            intakestage2.move_velocity(-600);
-        } else {
-            intakestage2.move_velocity(0); // If these buttons aren't being pressed then it like stops
-            intakestage1.move_velocity(0);
-        }
-        pros::delay(20);
-    }
-}
+
+
  //Intake Function
 void level2_level3_scoring() {
     while (true) {
-        if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) { //Outtakes thy intake
+        bool moving = false; // This is a boolean that will be used to check if the intake is moving
+         if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) { //Intake thy intake
+            moving = true; // If the button is pressed then it will move
+            intakestage1.move_velocity(-600);
+            intakestage2.move_velocity(-600);
+            intakestage3.move_velocity(600);
+            //.move_velocity(-600);
+
+        } else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1)) { //Outtake thy intake
+            moving = true; // If the button is pressed then it will move
             intakestage1.move_velocity(600);
             intakestage2.move_velocity(600);
-        }else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2)) { //Intake thy intake
-            intakestage1.move_velocity(600);
-            intakestage2.move_velocity(600);
+            //.move_velocity(600);
+        } else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1)) { //Unjam thy intake
+            moving = true; // If the button is pressed then it will move
+            intakestage1.move_velocity(-600);
+            intakestage2.move_velocity(-600);
+            //.move_velocity(600);
+        } else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2)) { //Unjam thy intake
+            moving = true; // If the button is pressed then it will move
+            intakestage1.move_velocity(-600);
+            intakestage2.move_velocity(-600);
+            intakestage3.move_velocity(600);
+            //.move_velocity(-600);
         } else {
             intakestage1.move_velocity(0); // If these buttons aren't being pressed then it like stops
             intakestage2.move_velocity(0);
+            intakestage3.move_velocity(0);
+            //.move_velocity(0);
+        }
+        if (moving && fabs(intakestage1.get_actual_velocity()) < 50) {
+
+        }
+        if (moving && fabs(intakestage2.get_actual_velocity()) < 50) {
+            //do unjam shit in task
         }
         pros::delay(20);
     }           
@@ -222,11 +232,11 @@ void pneumatics() {
 }
 
 void opcontrol() {
-    pros::Task Intake_Task(outtake_inttake); // Calls Intake Function
+    pros::Task Intake_Task(level2_level3_scoring); // Calls Intake Function
     pros::Task Pneumatics_Task(pneumatics); // Calls Pneumatics Function
     while (true) {
-        const int lateral = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y); // Moving Forward & Backward
-        const int linear = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X); // Turning
+        const int lateral = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X); // Moving Forward & Backward
+        const int linear = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y); // Turning
         chassis.arcade(lateral, linear); // Tells robot to move
         pros::delay(20); // Prevents freezing (very important to code)
     }
